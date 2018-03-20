@@ -1,0 +1,33 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "extensionHost",
+			"request": "launch",
+			"name": "Extension",
+			"preLaunchTask": "npm",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"outFiles": [ "${workspaceFolder}/out/**/*.js" ]
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Server",
+			"cwd": "${workspaceFolder}",
+			"program": "${workspaceFolder}/src/debugAdapter.ts",
+			"args": [ "--server=4711" ],
+			"outFiles": [ "${workspaceFolder}/out/**/*.js" ]
+		},
+		{
+			"type": "glua",
+			"request": "launch",
+			"name": "GLua Debug Sample",
+            "garrysmod": "${command:askgmodpath}",
+            "host": "${command:askhost}",
+            "key": "${command:askkey}"
+		}
+	]
+}

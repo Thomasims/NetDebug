@@ -1,0 +1,125 @@
+{
+	"name": "glua-netdebug",
+	"displayName": "GLua NetDebug",
+	"version": "0.0.1",
+	"publisher": "thomasims",
+	"description": "GLua Debugger for VSCode.",
+	"author": {
+		"name": "Thomasims",
+		"email": "thomas@geeksmod.net"
+	},
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.18.0",
+		"node": "^7.9.0"
+	},
+	"icon": "icon.png",
+	"categories": [
+		"Debuggers"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://gitlab.geeksmod.net/Thomasims/NetDebug.git"
+	},
+	"bugs": {
+		"url": "https://gitlab.geeksmod.net/Thomasims/NetDebug/issues"
+	},
+	"scripts": {
+		"prepublish": "tsc -p ./src",
+		"compile": "tsc -p ./src",
+		"tslint": "tslint ./src/**/*.ts",
+		"watch": "tsc -w -p ./src",
+		"test": "mocha -u tdd ./out/tests/",
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"package": "vsce package",
+		"publish": "vsce publish"
+	},
+	"dependencies": {
+		"await-notify": "1.0.1",
+		"vscode-debugadapter": "1.27.0",
+		"vscode-debugprotocol": "1.27.0"
+	},
+	"devDependencies": {
+		"@types/node": "7.0.55",
+		"@types/mocha": "2.2.48",
+		"typescript": "2.6.2",
+		"mocha": "5.0.1",
+		"vscode": "1.1.10",
+		"vscode-debugadapter-testsupport": "1.27.0",
+		"tslint": "5.9.1",
+		"vsce": "1.37.5"
+	},
+	"main": "./out/extension",
+	"activationEvents": [
+		"onDebug",
+		"onCommand:extension.glua-netdebug.getGModDir",
+		"onCommand:extension.glua-netdebug.getHost",
+		"onCommand:extension.glua-netdebug.getKey"
+	],
+	"contributes": {
+		"breakpoints": [
+			{
+				"language": "lua"
+			}
+		],
+		"debuggers": [
+			{
+				"type": "glua",
+				"label": "GLua Debug",
+				"program": "./out/debugAdapter.js",
+				"runtime": "node",
+				"configurationAttributes": {
+					"launch": {
+						"required": ["garrysmod", "host", "key"],
+						"properties": {
+							"garrysmod": {
+								"type": "string",
+								"description": "Path to the garrysmod directory of the server.",
+								"default": "${command:askgmodpath}"
+							},
+							"host": {
+								"type": "string",
+								"description": "Host address/port of the server to debug.",
+								"default": "${command:askhost}"
+							},
+							"key": {
+								"type": "string",
+								"description": "Shared key for authentication.",
+								"default": "${command:askkey}"
+							}
+						}
+					}
+				},
+				"initialConfigurations": [
+					{
+						"type": "glua",
+						"request": "launch",
+						"name": "Ask for garrysmod path and host info.",
+						"garrysmod": "${command:askgmodpath}",
+						"host": "${command:askhost}",
+						"key": "${command:askkey}"
+					}
+				],
+				"configurationSnippets": [
+					{
+						"label": "GLua Debug: Launch",
+						"description": "A new configuration for 'debugging' a garrysmod server.",
+						"body": {
+							"type": "glua",
+							"request": "launch",
+							"name": "Ask for garrysmod path and host info.",
+							"garrysmod": "^\"\\${command:askgmodpath}\"",
+							"host": "^\"${command:askhost}\"",
+							"key": "^\"${command:askkey}\""
+						}
+					}
+				],
+				"variables": {
+					"askgmodpath": "extension.glua-netdebug.getGModDir",
+					"askhost": "extension.glua-netdebug.getHost",
+					"askkey": "extension.glua-netdebug.getKey"
+				}
+			}
+		]
+	}
+}
