@@ -51,17 +51,18 @@ netdebug.startdebug = function( tDebug )
 		if bCanSkip and not tFiles[sSrc] then return end
 		
 		if bCanSkip then -- We've just hit a breakpoint, construct the call stack
-			tStack = { src = "TOP", line = -1, previous = {}}
-			local tInfo = debug.getinfo( 3, "lS" )
+			tStack = {}
+			local tInfo = debug.getinfo( 3 )
 			local i = 3
 			local tPtr = tStack.previous
 			while tInfo do
 				tPtr.src = tInfo.short_src
 				tPtr.line = tInfo.currentline
-				tPtr.previous = {}
+				tPtr.info = tInfo
+				tPtr.previous = { src = "TOP", line = -1, previous = {} }
 				tPtr = tPtr.previous
 				i = i + 1
-				tInfo = debug.getinfo( i, "lS" )
+				tInfo = debug.getinfo( i )
 			end
 			iStack = i - 2
 			bCanSkip = false
@@ -76,6 +77,8 @@ netdebug.startdebug = function( tDebug )
 			if sStep == "in" or iStack <= iStackStep then
 				bShouldBreak = true
 			end
+			tStack.src = sSrc
+			tStack.line = iLine
 		elseif sType == "call" then
 			-- DONE: Detect tail-calls and modify the stack info accordingly
 			-- DONE: Update stack
@@ -88,18 +91,19 @@ netdebug.startdebug = function( tDebug )
 				tStack = tStack.previous -- Tail-call, pop parent
 				iStack = iStack - 1
 			end
-			if sSrc == "[C]" then return end -- Don't bother adding C calls to the stack, return is never called.
-			local tInfo = debug.getinfo( 2 )
-			iLine = tInfo.currentline
-			tStack = {
-				src = sSrc,
-				line = iLine,
-				info = tInfo,
-				previous = tStack
-			}
-			iStack = iStack + 1
-			if sStep == "in" then
-				bShouldBreak = true
+			if sSrc ~= "[C]" then -- Don't bother adding C calls to the stack, return is never called.
+				local tInfo = debug.getinfo( 2 )
+				iLine = tInfo.currentline
+				tStack = {
+					src = sSrc,
+					line = iLine,
+					info = tInfo,
+					previous = tStack
+				}
+				iStack = iStack + 1
+				if sStep == "in" then
+					bShouldBreak = true
+				end
 			end
 		elseif sType == "return" then
 			-- DONE: Update stack
