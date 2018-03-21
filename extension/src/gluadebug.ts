@@ -9,7 +9,7 @@ import { basename } from 'path';
 import { GLuaRuntime, GLuaBreakpoint } from './gluaruntime';
 const { Subject } = require('await-notify');
 
-interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
+interface AttachRequestArguments extends DebugProtocol.AttachRequestArguments {
 	garrysmod: string;
 	host: string;
 	key: string;
@@ -28,8 +28,8 @@ export class GLuaDebugSession extends LoggingDebugSession {
 	public constructor() {
 		super("gluadebug.log");
 
-		this.setDebuggerLinesStartAt1(true);
-		this.setDebuggerColumnsStartAt1(true);
+		this.setDebuggerLinesStartAt1(false);
+		this.setDebuggerColumnsStartAt1(false);
 
 		this._runtime = new GLuaRuntime();
 
@@ -94,15 +94,9 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		this._configurationDone.notify();
 	}
 
-	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
-
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
+	protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments) {
 		logger.setup(Logger.LogLevel.Verbose, false);
-
-		// wait until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
-
-		// start the program in the runtime
 		this._runtime.start(args.garrysmod, args.host, args.key);
 
 		this.sendResponse(response);

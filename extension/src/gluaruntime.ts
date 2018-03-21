@@ -41,12 +41,12 @@ export class GLuaRuntime extends EventEmitter {
 	 */
 	public start(garrysmod: string, host: string, key: string) {
 
-		console.log(garrysmod, host, key);
 		this.loadSource(garrysmod);
-		this._currentLine = -1;
+		this._currentLine = 2;
 
 		this.verifyBreakpoints(this._sourceFile);
-
+		this.sendEvent('output', "abc", this._sourceFile, 2, 7);
+		this.sendEvent('stopOnBreakpoint');
 		this.continue();
 	}
 
@@ -54,14 +54,14 @@ export class GLuaRuntime extends EventEmitter {
 	 * Continue execution to the end/beginning.
 	 */
 	public continue() {
-		this.run(undefined);
+		
 	}
 
 	/**
 	 * Step to the next/previous non empty line.
 	 */
 	public step(event = 'stopOnStep') {
-		this.run(event);
+		this.sendEvent(event);
 	}
 
 	/**
@@ -138,21 +138,6 @@ export class GLuaRuntime extends EventEmitter {
 		}
 	}
 
-	/**
-	 * Run through the file.
-	 * If stepEvent is specified only run a single step and emit the stepEvent.
-	 */
-	private run(stepEvent?: string) {
-		for (let ln = this._currentLine+1; ln < this._sourceLines.length; ln++) {
-            if (this.fireEventsForLine(ln, stepEvent)) {
-                this._currentLine = ln;
-                return true;
-            }
-        }
-        // no more lines: run to end
-        this.sendEvent('end');
-	}
-
 	private verifyBreakpoints(path: string) : void {
 		let bps = this._breakPoints.get(path);
 		if (bps) {
@@ -160,73 +145,13 @@ export class GLuaRuntime extends EventEmitter {
 			bps.forEach(bp => {
 				if (!bp.verified && bp.line < this._sourceLines.length) {
 					const srcLine = this._sourceLines[bp.line].trim();
-					console.log("hai")
-					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
-					if (srcLine.length === 0 || srcLine.indexOf('+') === 0) {
-						bp.line++;
-					}
-					// if a line starts with '-' we don't allow to set a breakpoint but move the breakpoint up
-					if (srcLine.indexOf('-') === 0) {
-						bp.line--;
-					}
-					// don't set 'verified' to true if the line contains the word 'lazy'
-					// in this case the breakpoint will be verified 'lazy' after hitting it once.
-					if (srcLine.indexOf('lazy') < 0) {
+					if (srcLine.length !== 0) {
 						bp.verified = true;
 						this.sendEvent('breakpointValidated', bp);
 					}
 				}
 			});
 		}
-	}
-
-	/**
-	 * Fire events if line has a breakpoint or the word 'exception' is found.
-	 * Returns true is execution needs to stop.
-	 */
-	private fireEventsForLine(ln: number, stepEvent?: string): boolean {
-
-		const line = this._sourceLines[ln].trim();
-
-		// if 'log(...)' found in source -> send argument to debug console
-		const matches = /log\((.*)\)/.exec(line);
-		if (matches && matches.length === 2) {
-			this.sendEvent('output', matches[1], this._sourceFile, ln, matches.index)
-		}
-
-		// if word 'exception' found in source -> throw exception
-		if (line.indexOf('exception') >= 0) {
-			this.sendEvent('stopOnException');
-			return true;
-		}
-
-		// is there a breakpoint?
-		const breakpoints = this._breakPoints.get(this._sourceFile);
-		if (breakpoints) {
-			const bps = breakpoints.filter(bp => bp.line === ln);
-			if (bps.length > 0) {
-
-				// send 'stopped' event
-				this.sendEvent('stopOnBreakpoint');
-
-				// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
-				// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
-				if (!bps[0].verified) {
-					bps[0].verified = true;
-					this.sendEvent('breakpointValidated', bps[0]);
-				}
-				return true;
-			}
-		}
-
-		// non-empty line
-		if (stepEvent && line.length > 0) {
-			this.sendEvent(stepEvent);
-			return true;
-		}
-
-		// nothing interesting found -> continue
-		return false;
 	}
 
 	private sendEvent(event: string, ... args: any[]) {
