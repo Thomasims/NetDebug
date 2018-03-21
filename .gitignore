@@ -1,3 +1,5 @@
 extension/node_modules
 extension/out
 extension/*.log
+extension/package-lock.json
+extension/*.vsix

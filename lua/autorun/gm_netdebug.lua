@@ -110,7 +110,7 @@ netdebug.startdebug = function( tDebug )
 			-- DONE: Set breaktype to in if iStack is back
 			tStack = tStack.previous
 			iStack = iStack - 1
-			if sStep == "over" and iStack <= iStackStep then
+			if sStep == "over" and iStack < iStackStep then
 				local tInfo = debug.getinfo( 2 )
 				iLine = tInfo.currentline
 				bShouldBreak = true
@@ -125,7 +125,11 @@ netdebug.startdebug = function( tDebug )
 		end
 
 		if bShouldBreak then
-			sStep = netdebug.onbreak( sSrc, iLine )
+			if sStep == "over" then
+				sStep = "in"
+			else
+				sStep = netdebug.onbreak( sSrc, iLine )
+			end
 			iStackStep = iStack
 			if sStep == "out" then
 				sStep = "over"

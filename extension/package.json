@@ -69,8 +69,12 @@
 				"program": "./out/debugAdapter.js",
 				"runtime": "node",
 				"configurationAttributes": {
-					"launch": {
-						"required": ["garrysmod", "host", "key"],
+					"attach": {
+						"required": [
+							"garrysmod",
+							"host",
+							"key"
+						],
 						"properties": {
 							"garrysmod": {
 								"type": "string",
@@ -93,7 +97,7 @@
 				"initialConfigurations": [
 					{
 						"type": "glua",
-						"request": "launch",
+						"request": "attach",
 						"name": "Ask for garrysmod path and host info.",
 						"garrysmod": "${command:askgmodpath}",
 						"host": "${command:askhost}",
@@ -102,11 +106,11 @@
 				],
 				"configurationSnippets": [
 					{
-						"label": "GLua Debug: Launch",
-						"description": "A new configuration for 'debugging' a garrysmod server.",
+						"label": "GLua Debug: Attach",
+						"description": "A new configuration for debugging a garrysmod server.",
 						"body": {
 							"type": "glua",
-							"request": "launch",
+							"request": "attach",
 							"name": "Ask for garrysmod path and host info.",
 							"garrysmod": "^\"\\${command:askgmodpath}\"",
 							"host": "^\"${command:askhost}\"",
