@@ -1,5 +1,7 @@
 import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
+import { createConnection, Socket } from 'net';
+import { logger } from 'vscode-debugadapter';
 
 export interface GLuaBreakpoint {
 	id: number;
@@ -30,6 +32,8 @@ export class GLuaRuntime extends EventEmitter {
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
 	private _breakpointId = 1;
+	
+	private _connection: Socket;
 
 
 	constructor() {
@@ -39,15 +43,37 @@ export class GLuaRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public start(garrysmod: string, host: string, key: string) {
+	public start(garrysmod: string, host: string, key: string): Promise<string> {
 
 		this.loadSource(garrysmod);
 		this._currentLine = 2;
 
-		this.verifyBreakpoints(this._sourceFile);
-		this.sendEvent('output', "abc", this._sourceFile, 2, 7);
-		this.sendEvent('stopOnBreakpoint');
-		this.continue();
+		let runtime = this;
+		return new Promise((success, reject) => {
+			let matches = host.match("([^:]+)(?::(.*))?");
+			if(!matches) {
+				reject("Invalid Host");
+				return;
+			};
+			runtime._connection = createConnection(parseInt(matches[2] || "27100"), matches[1]);
+			runtime._connection.setTimeout(1000);
+			runtime._connection.on("error", err => {
+				logger.log("runtime error");
+				reject(err.message);
+			});
+			runtime._connection.on("close", () => {
+				logger.log("runtime close");
+				runtime.sendEvent('end');
+			});
+			runtime._connection.on("connect", () => {
+				logger.log("runtime open");
+				success();
+				runtime.verifyBreakpoints(runtime._sourceFile);
+				runtime.sendEvent('output', "abc", runtime._sourceFile, 2, 7);
+				runtime.sendEvent('stopOnBreakpoint');
+				runtime.continue();
+			});
+		});
 	}
 
 	/**

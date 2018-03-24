@@ -97,9 +97,16 @@ export class GLuaDebugSession extends LoggingDebugSession {
 	protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments) {
 		logger.setup(Logger.LogLevel.Verbose, false);
 		await this._configurationDone.wait(1000);
-		this._runtime.start(args.garrysmod, args.host, args.key);
-
-		this.sendResponse(response);
+		this._runtime.start(args.garrysmod, args.host, args.key).then(() => {
+			logger.log("adapter then");
+			this.sendResponse(response);
+		}).catch(err => {
+			logger.log("adapter catch");
+			response.message = err;
+			response.success = false;
+			this.sendErrorResponse(response, err);
+		});
+ 
 	}
 
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
@@ -206,11 +213,6 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments) : void {
-		this._runtime.continue();
-		this.sendResponse(response);
- 	}
-
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
 		this._runtime.step();
 		this.sendResponse(response);
@@ -253,6 +255,6 @@ export class GLuaDebugSession extends LoggingDebugSession {
 	//---- helpers
 
 	private createSource(filePath: string): Source {
-		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'glua-adapter-data');
 	}
 }
