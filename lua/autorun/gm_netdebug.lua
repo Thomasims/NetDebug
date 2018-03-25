@@ -99,13 +99,18 @@ local iStack = -1
 startdebug = function( tDebug )
 	updatebreakpoints( tDebug.breakpoints )
 	debug.sethook( function( sType, iLine )
-		if bCanSkip and sType ~= "line" then return end
-		local tFiles = tLines[iLine]
-		if bCanSkip and not tFiles then return end
-		local sSrc = debug.getinfo( 2, "S" ).short_src
-		if bCanSkip and not tFiles[sSrc] then return end
+		local sSrc
+		if bCanSkip then
+			if sType ~= "line" then return end
+			local tFiles = tLines[iLine]
+			if not tFiles then return end
+			sSrc = debug.getinfo( 2, "S" ).short_src
+			if not tFiles[sSrc] then return end
+		else
+			sSrc = debug.getinfo( 2, "S" ).short_src
+		end
 		
-		if bCanSkip then -- We've just hit a breakpoint, construct the call stack
+		if bCanSkip then -- We've just hit a breakpoint (or we were paused by the debugger), construct the call stack
 			tStack = {}
 			local tInfo = debug.getinfo( 2 )
 			local i = 2
