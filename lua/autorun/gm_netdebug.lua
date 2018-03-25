@@ -39,7 +39,6 @@ timer.Create( "NetDebug", 1, 0, function()
 	elseif sState == "Connected" then
 		local str = sv:TryReadString()
 		if str then
-			print(str)
 			local dt = util.JSONToTable( str )
 			if dt and dt.type then
 				if bAuthed then
@@ -51,14 +50,14 @@ timer.Create( "NetDebug", 1, 0, function()
 							type = "AuthRsp",
 							info = sNonce
 						} )
-						print("sent nonce")
+						print("Sent nonce")
 					elseif dt.type == "AuthRsp" then
 						if sv:CheckAuth( config.key, sNonce, dt.info:upper() ) then
 							bAuthed = true
-							print("authed")
+							print("Debugger authed")
 						else
 							sv:Drop()
-							print("dropped")
+							print("Debugger refused")
 						end
 					end
 				end
@@ -167,7 +166,6 @@ startdebug = function( tDebug )
 			-- DONE: Set breaktype to in if iStack is back
 			tStack = tStack.previous
 			iStack = iStack - 1
-			print("return", iStack)
 			if sStep == "over" and iStack < iStackStep then
 				local tInfo = debug.getinfo( 2 )
 				iLine = tInfo.currentline
@@ -276,7 +274,6 @@ dobreak = function( tStack )
 	while true do
 		local s = sv:ReadString()
 		if not s then return stopdebug() end
-		print(s)
 		local b, m = pcall(onmessage, util.JSONToTable(s))
 		if b and m then
 			return m
@@ -323,7 +320,10 @@ onmessage = function( tMsg )
 			code=string.format("%slocal %s = select(%d, ...)\n", code, k, i) args[i]=v i=i+1
 		end
 		for k,v in pairs(frame.locals) do
-			code=string.format("%slocal %s = select(%d, ...)\n", code, k, i) args[i]=v i=i+1
+			if k:match("^[a-zA-Z_][^ ]*$") then
+				code=string.format("%slocal %s = select(%d, ...)\n", code, k, i)
+				args[i]=v i=i+1
+			end
 		end
 		local fn, err = CompileString(code .. "return " .. tMsg.info.expression, tMsg.info.context)
 		local response = {id=tMsg.info.id, type="nil", val="nil"}
