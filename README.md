@@ -37,7 +37,7 @@ Or just clone the project in the addons folder, the folder structure is already 
 - Launch the Garry's Mod server.
 - Start a new debugging session in VSCode (F5) and choose `GLua Debug` (one the first run this will not launch but instead show the config)
 - Modify the new launch configuration to suit your setup.
-  - `garrysmod` should point to the `garrysmod` directory of the server (or a local copy). (This is the directory that contains `addons`, `gamemodes` and so on.)
+  - `garrysmod` should point to the `garrysmod` directory of the server (or a local copy). (This is the directory that contains `addons`, `gamemodes` and so on.) **BUG: This must end with a `/` or `\\`**
   - `host` is a string in 2 parts seperated by a colon, the address and the port. Use the same as in the config of the lua file.
   - `key` is the key used in the config of the lua file
 - Place breakpoints and start debugging in vscode.
