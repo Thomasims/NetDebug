@@ -73,10 +73,11 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		response.body.supportsConfigurationDoneRequest = true;
 
 		// make VS Code to use 'evaluate' when hovering over source
-		response.body.supportsEvaluateForHovers = true;
+		response.body.supportsEvaluateForHovers = false;
 
 		// make VS Code to show a 'step back' button
 		response.body.supportsStepBack = false;
+
 
 		this.sendResponse(response);
 
@@ -188,14 +189,14 @@ export class GLuaDebugSession extends LoggingDebugSession {
 						if(val.type == "table") {
 							variables.push({
 								name: val.name,
-								type: "object",
-								value: "Table",
+								type: "table",
+								value: val.val,
 								variablesReference: this._variableHandles.create("subvar_" + frame + "." + val.name)
 							});
 						} else
 							variables.push({
 								name: val.name,
-								type: val.type == "number" ? "float" : "string",
+								type: val.type == "number" ? "float" : val.type,
 								value: val.val,
 								variablesReference: 0
 							});
@@ -211,14 +212,14 @@ export class GLuaDebugSession extends LoggingDebugSession {
 					if(val.type == "table") {
 						variables.push({
 							name: val.name,
-							type: "object",
-							value: "Table",
+							type: "table",
+							value: val.val,
 							variablesReference: this._variableHandles.create("subvar_" + type + "_" + frame + "." + val.name)
 						});
 					} else
 						variables.push({
 							name: val.name,
-							type: val.type == "number" ? "float" : "string",
+							type: val.type == "number" ? "float" : val.type,
 							value: val.val,
 							variablesReference: 0
 						});
@@ -252,9 +253,8 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
+	private _exprid = 1;
 	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
-
-		let reply: string | undefined = undefined;
 
 		/*if (args.context === 'repl') {
 			// 'evaluate' supports to create and delete breakpoints from the 'repl':
@@ -279,11 +279,22 @@ export class GLuaDebugSession extends LoggingDebugSession {
 			}
 		}*/
 
-		response.body = {
-			result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
-			variablesReference: 0
-		};
-		this.sendResponse(response);
+		let id = "E" + this._exprid++;
+		this._runtime.evaluate(id, args.expression, args.context, args.frameId).then((reply) => {
+			if(reply.type == "table") {
+				response.body = {
+					type: "table",
+					result: reply.val,
+					variablesReference: this._variableHandles.create("subvar_expr_" + args.frameId + "." + id)
+				};
+			} else
+				response.body = {
+					type: reply.type == "number" ? "float" : reply.type,
+					result: reply.val,
+					variablesReference: 0
+				};
+			this.sendResponse(response);
+		});
 	}
 
 	//---- helpers

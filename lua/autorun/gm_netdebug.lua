@@ -229,7 +229,7 @@ dobreak = function( tStack )
 		local args = {}
 		local locals = {}
 		local upvalues = {}
-		local info = {args={},locals={},upvalues={}}
+		local info = {args={},locals={},upvalues={},expr={}}
 		framesdt[#framesdt + 1] = info
 		for name, val in lpairs(iF, debug.getlocal) do
 			if name ~= "(*temporary)" then
@@ -311,6 +311,39 @@ onmessage = function( tMsg )
 		sendmessage{
 			type = "DetailRsp",
 			info = vals
+		}
+	elseif tMsg.type == "EvalReq" then
+		local frame = framesdt[tMsg.info.frame + 1]
+		local code = ""
+		local args, i = {}, 1
+		for k,v in pairs(frame.upvalues) do
+			code=string.format("%slocal %s = select(%d, ...)\n", code, k, i) args[i]=v i=i+1
+		end
+		for k,v in pairs(frame.args) do
+			code=string.format("%slocal %s = select(%d, ...)\n", code, k, i) args[i]=v i=i+1
+		end
+		for k,v in pairs(frame.locals) do
+			code=string.format("%slocal %s = select(%d, ...)\n", code, k, i) args[i]=v i=i+1
+		end
+		local fn, err = CompileString(code .. "return " .. tMsg.info.expression, tMsg.info.context)
+		local response = {id=tMsg.info.id, type="nil", val="nil"}
+		if not fn then
+			response.type = "error"
+			response.val = err
+		else
+			local success, val = pcall(fn, unpack(args))
+			if not success then
+				response.type = "error"
+				response.val = err
+			else
+				response.type = type(val)
+				response.val = tostring(val)
+				frame.expr[tMsg.info.id] = val
+			end
+		end
+		sendmessage{
+			type = "EvalRsp",
+			info = response
 		}
 	elseif tMsg.type == "continue" then
 		return "continue"

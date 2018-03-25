@@ -27,7 +27,7 @@ interface LuaPosition {
 
 interface LuaMessage {
 	type: string;
-	info: LuaPosition[] | string | LuaKeyPair[];
+	info: any;
 }
 
 export class GLuaRuntime extends EventEmitter {
@@ -42,6 +42,8 @@ export class GLuaRuntime extends EventEmitter {
 	
 	private _connection: Socket;
 
+	private _evalreq: Map<string, (value: any) => void>;
+
 
 	constructor() {
 		super();
@@ -53,6 +55,8 @@ export class GLuaRuntime extends EventEmitter {
 		this._garrysmod = garrysmod;
 		this._key = key;
 		this._ready = false;
+
+		this._evalreq = new Map<string, (value: any) => void>();
 
 		let runtime = this;
 		return new Promise((success, reject) => {
@@ -160,6 +164,21 @@ export class GLuaRuntime extends EventEmitter {
 
 	public upvalues(frame: string): LuaKeyPair[] {
 		return this._stack[frame].upvalues;
+	}
+
+	public evaluate(id: string, expression: string, context?: string, frameId?: number): Promise<any> {
+		this.sendToLua({
+			type: "EvalReq",
+			info: {
+				id: id,
+				expression: expression,
+				context: context,
+				frame: frameId
+			}
+		})
+		return new Promise<any>(success => {
+			this._evalreq.set(id, success);
+		});
 	}
 
 	public setBreakPoint(path: string, line: number) : GLuaBreakpoint {
@@ -279,6 +298,12 @@ export class GLuaRuntime extends EventEmitter {
 				break;
 			case "DetailRsp":
 				this._varreq(data.info as LuaKeyPair[]);
+				break;
+			case "EvalRsp":
+				let fn = this._evalreq.get(data.info.id);
+				if(fn)
+					fn(data.info);
+				this._evalreq.delete(data.info.id);
 				break;
 			case "continue":
 				this.sendEvent("continue");
