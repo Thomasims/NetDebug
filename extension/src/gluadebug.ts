@@ -2,7 +2,7 @@ import {
 	Logger, logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
-	Thread, StackFrame, Scope, Source, Handles, Breakpoint
+	Thread, StackFrame, Scope, Source, Handles, Breakpoint, ContinuedEvent
 } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
@@ -28,8 +28,8 @@ export class GLuaDebugSession extends LoggingDebugSession {
 	public constructor() {
 		super("gluadebug.log");
 
-		this.setDebuggerLinesStartAt1(false);
-		this.setDebuggerColumnsStartAt1(false);
+		this.setDebuggerLinesStartAt1(true);
+		this.setDebuggerColumnsStartAt1(true);
 
 		this._runtime = new GLuaRuntime();
 
@@ -45,6 +45,9 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		});
 		this._runtime.on('stopOnException', () => {
 			this.sendEvent(new StoppedEvent('exception', GLuaDebugSession.THREAD_ID));
+		});
+		this._runtime.on('continue', () => {
+			this.sendEvent(new ContinuedEvent(GLuaDebugSession.THREAD_ID));
 		});
 		this._runtime.on('breakpointValidated', (bp: GLuaBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', <DebugProtocol.Breakpoint>{ verified: bp.verified, id: bp.id }));
@@ -152,7 +155,7 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		const stk = this._runtime.stack(startFrame, endFrame);
 
 		response.body = {
-			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line))),
+			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line), this.convertDebuggerColumnToClient(f.column))),
 			totalFrames: stk.count
 		};
 		this.sendResponse(response);
@@ -162,8 +165,9 @@ export class GLuaDebugSession extends LoggingDebugSession {
 
 		const frameReference = args.frameId;
 		const scopes = new Array<Scope>();
-		scopes.push(new Scope("Local", this._variableHandles.create("local_" + frameReference), false));
-		scopes.push(new Scope("Global", this._variableHandles.create("global_" + frameReference), true));
+		scopes.push(new Scope("Arguments", this._variableHandles.create("args_" + frameReference), false));
+		scopes.push(new Scope("Locals", this._variableHandles.create("locals_" + frameReference), false));
+		scopes.push(new Scope("Upvalues", this._variableHandles.create("upvalues_" + frameReference), false));
 
 		response.body = {
 			scopes: scopes
@@ -175,37 +179,57 @@ export class GLuaDebugSession extends LoggingDebugSession {
 
 		const variables = new Array<DebugProtocol.Variable>();
 		const id = this._variableHandles.get(args.variablesReference);
-		if (id !== null) {
-			variables.push({
-				name: id + "_i",
-				type: "integer",
-				value: "123",
-				variablesReference: 0
-			});
-			variables.push({
-				name: id + "_f",
-				type: "float",
-				value: "3.14",
-				variablesReference: 0
-			});
-			variables.push({
-				name: id + "_s",
-				type: "string",
-				value: "hello world",
-				variablesReference: 0
-			});
-			variables.push({
-				name: id + "_o",
-				type: "object",
-				value: "Object",
-				variablesReference: this._variableHandles.create("object_")
-			});
-		}
+		let mts = id.match(/([^_]+)_(.*)/);
+		if(mts) {
+			let type = mts[1], frame = mts[2];
+			if(type == "subvar") {
+				(this._runtime[type](frame) as Promise<any>).then(v => {
+					v.forEach((val) => {
+						if(val.type == "table") {
+							variables.push({
+								name: val.name,
+								type: "object",
+								value: "Table",
+								variablesReference: this._variableHandles.create("subvar_" + frame + "." + val.name)
+							});
+						} else
+							variables.push({
+								name: val.name,
+								type: val.type == "number" ? "float" : "string",
+								value: val.val,
+								variablesReference: 0
+							});
+					});
 
-		response.body = {
-			variables: variables
-		};
-		this.sendResponse(response);
+					response.body = {
+						variables: variables
+					};
+					this.sendResponse(response);
+				});
+			} else {
+				(this._runtime[type](parseInt(frame)) as Array<any>).forEach((val) => {
+					if(val.type == "table") {
+						variables.push({
+							name: val.name,
+							type: "object",
+							value: "Table",
+							variablesReference: this._variableHandles.create("subvar_" + type + "_" + frame + "." + val.name)
+						});
+					} else
+						variables.push({
+							name: val.name,
+							type: val.type == "number" ? "float" : "string",
+							value: val.val,
+							variablesReference: 0
+						});
+				});
+
+				response.body = {
+					variables: variables
+				};
+				this.sendResponse(response);
+			}
+		}
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
@@ -218,11 +242,21 @@ export class GLuaDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
+	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
+		this._runtime.step("stepIn");
+		this.sendResponse(response);
+	}
+
+	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
+		this._runtime.step("stepOut");
+		this.sendResponse(response);
+	}
+
 	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
 
 		let reply: string | undefined = undefined;
 
-		if (args.context === 'repl') {
+		/*if (args.context === 'repl') {
 			// 'evaluate' supports to create and delete breakpoints from the 'repl':
 			const matches = /new +([0-9]+)/.exec(args.expression);
 			if (matches && matches.length === 2) {
@@ -243,7 +277,7 @@ export class GLuaDebugSession extends LoggingDebugSession {
 					}
 				}
 			}
-		}
+		}*/
 
 		response.body = {
 			result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,

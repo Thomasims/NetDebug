@@ -17,10 +17,59 @@ key = "CHANGEME"
 }
 
 if SERVER then AddCSLuaFile() end
-if not pcall( require, "netdebug" ) then return end
+if not pcall( require, "blocksocket" ) then return end
 
-netdebug.bind( config.address, config.port )
-netdebug.setkey( config.key )
+module("netdebug", package.seeall)
+
+local sv = blocksocket()
+SV=sv
+sv:Bind( config.address, config.port )
+local sState = sv:GetState()
+local bDebugging = false
+local bAuthed = false
+local sNonce
+timer.Create( "NetDebug", 1, 0, function()
+	if bDebugging then return end
+	if sState == "Bound" then
+		if sv:TryAccept() then
+			bAuthed = false
+			sState = sv:GetState()
+			print("Accepted a socket")
+		end
+	elseif sState == "Connected" then
+		local str = sv:TryReadString()
+		if str then
+			print(str)
+			local dt = util.JSONToTable( str )
+			if dt and dt.type then
+				if bAuthed then
+					onmessage(dt)
+				else
+					if dt.type == "AuthReq" then
+						sNonce = string.format( "%08X%08X", math.random( 0, 4294967296 ), math.random( 0, 4294967296 ) )
+						sv:WriteString( util.TableToJSON{
+							type = "AuthRsp",
+							info = sNonce
+						} )
+						print("sent nonce")
+					elseif dt.type == "AuthRsp" then
+						if sv:CheckAuth( config.key, sNonce, dt.info:upper() ) then
+							bAuthed = true
+							print("authed")
+						else
+							sv:Drop()
+							print("dropped")
+						end
+					end
+				end
+			else
+				sv:Drop()
+				stopdebug()
+			end
+		end
+		sState = sv:GetState()
+	end
+end )
 
 -- Utility function to iterate over locals/upvalues
 local lpairs = function( fFunc, fFetcher )
@@ -31,18 +80,25 @@ local lpairs = function( fFunc, fFetcher )
 	end
 end
 
-netdebug.startdebug = function( tDebug )
-	local tLines = {}
-	for i, tBreakpoint in ipairs( tDebug.breakpoints ) do
+local tLines = {}
+
+updatebreakpoints = function( tBreakpoints )
+	tLines = {}
+	for i, tBreakpoint in ipairs( tBreakpoints ) do
 		-- I know this may seem backwards but it allows for better performance while debugging.
 		tLines[tBreakpoint.line] = tLines[tBreakpoint.line] or {}
 		tLines[tBreakpoint.line][tBreakpoint.src] = true
 	end
-	local bCanSkip = true
-	local sStep, iStackStep = "continue", 0
-	local tStepOver
-	local tStack
-	local iStack = -1
+end
+
+local bCanSkip = true
+local sStep, iStackStep = "continue", 0
+local tStepOver
+local tStack
+local iStack = -1
+
+startdebug = function( tDebug )
+	updatebreakpoints( tDebug.breakpoints )
 	debug.sethook( function( sType, iLine )
 		if bCanSkip and sType ~= "line" then return end
 		local tFiles = tLines[iLine]
@@ -52,9 +108,9 @@ netdebug.startdebug = function( tDebug )
 		
 		if bCanSkip then -- We've just hit a breakpoint, construct the call stack
 			tStack = {}
-			local tInfo = debug.getinfo( 3 )
-			local i = 3
-			local tPtr = tStack.previous
+			local tInfo = debug.getinfo( 2 )
+			local i = 2
+			local tPtr = tStack
 			while tInfo do
 				tPtr.src = tInfo.short_src
 				tPtr.line = tInfo.currentline
@@ -66,6 +122,7 @@ netdebug.startdebug = function( tDebug )
 			end
 			iStack = i - 2
 			bCanSkip = false
+			bDebugging = true
 			sStep = "in"
 		end
 
@@ -110,6 +167,7 @@ netdebug.startdebug = function( tDebug )
 			-- DONE: Set breaktype to in if iStack is back
 			tStack = tStack.previous
 			iStack = iStack - 1
+			print("return", iStack)
 			if sStep == "over" and iStack < iStackStep then
 				local tInfo = debug.getinfo( 2 )
 				iLine = tInfo.currentline
@@ -121,15 +179,12 @@ netdebug.startdebug = function( tDebug )
 			end
 			if iStack == 0 then
 				bCanSkip = true -- Returned from the last function, no point in continuing after this.
+				bShouldBreak = false
 			end
 		end
 
 		if bShouldBreak then
-			if sStep == "over" then
-				sStep = "in"
-			else
-				sStep = netdebug.onbreak( sSrc, iLine )
-			end
+			sStep = dobreak( tStack )
 			iStackStep = iStack
 			if sStep == "out" then
 				sStep = "over"
@@ -145,10 +200,131 @@ netdebug.startdebug = function( tDebug )
 			tStepOver = nil
 			tStack = nil
 			iStackStep = 0
+			bDebugging = false
+			sendmessage {
+				type = "continue"
+			}
 		end
 	end, "lcr" )
 end
 
-netdebug.stopdebug = function()
+stopdebug = function()
+	bDebugging = false
+	sStep = "continue"
+	iStack = -1
+	tStepOver = nil
+	tStack = nil
+	iStackStep = 0
+	bCanSkip = true
 	debug.sethook()
+end
+local frames
+local framesdt
+dobreak = function( tStack )
+	frames = {}
+	framesdt = {}
+	local tPtr = tStack
+	local iF = 3
+	while tPtr and tPtr.src ~= "TOP" do
+		local args = {}
+		local locals = {}
+		local upvalues = {}
+		local info = {args={},locals={},upvalues={}}
+		framesdt[#framesdt + 1] = info
+		for name, val in lpairs(iF, debug.getlocal) do
+			if name ~= "(*temporary)" then
+				if #args < tPtr.info.nparams then
+					args[#args + 1] = {
+						name = name,
+						type = type(val),
+						val = tostring(val)
+					}
+					info.args[name] = val
+				else
+					locals[#locals + 1] = {
+						name = name,
+						type = type(val),
+						val = tostring(val)
+					}
+					info.locals[name] = val
+				end
+			end
+		end
+		for name, val in lpairs(tPtr.info.func, debug.getupvalue) do
+			upvalues[#upvalues + 1] = {
+				name = name,
+				type = type(val),
+				val = tostring(val)
+			}
+			info.upvalues[name] = val
+		end
+		iF = iF + 1
+		frames[#frames + 1] = {
+			file = tPtr.src,
+			line = tPtr.line,
+			column = 0,
+			args = args,
+			locals = locals,
+			upvalues = upvalues
+		}
+		tPtr = tPtr.previous
+	end
+	sendmessage {
+		type = "Frame",
+		info = frames
+	}
+	while true do
+		local s = sv:ReadString()
+		if not s then return stopdebug() end
+		print(s)
+		local b, m = pcall(onmessage, util.JSONToTable(s))
+		if b and m then
+			return m
+		elseif not b then
+			ErrorNoHalt(m)
+			stopdebug()
+		end
+	end
+end
+
+onmessage = function( tMsg )
+	if tMsg.type == "StartDebug" then
+		startdebug(tMsg.info)
+		return "continue"
+	elseif tMsg.type == "BreakpointUpd" then
+		updatebreakpoints(tMsg.info)
+	elseif tMsg.type == "DetailReq" then
+		local tp, fr, dt = tMsg.info:match("([^_]+)_([^.]+)%.(.*)")
+		local vars = framesdt[tonumber(fr) + 1][tp]
+		local var = vars
+		for n in dt:gmatch("[^.]+") do
+			var = var[n]
+		end
+		local vals = {}
+		for k,v in pairs(var) do
+			vals[#vals + 1] = {
+				name = k,
+				type = type(v),
+				val = tostring(v)
+			}
+		end
+		sendmessage{
+			type = "DetailRsp",
+			info = vals
+		}
+	elseif tMsg.type == "continue" then
+		return "continue"
+	elseif tMsg.type == "step" then
+		if tMsg.info == "stopOnStep" then
+			return "over"
+		elseif tMsg.info == "stepIn" then
+			return "in"
+		elseif tMsg.info == "stepOut" then
+			return "out"
+		end
+	end
+end
+
+sendmessage = function( tMsg )
+	sv:WriteString( util.TableToJSON( tMsg ) )
 end

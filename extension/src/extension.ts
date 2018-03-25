@@ -7,19 +7,19 @@ import * as Net from 'net';
 
 export function activate(context: vscode.ExtensionContext) {
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.glua-debug.getGModDir', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.glua-netdebug.getGModDir', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter the path to the garrysmod directory to use for providing source files.",
 			value: ""
 		});
 	}));
-	context.subscriptions.push(vscode.commands.registerCommand('extension.glua-debug.getHost', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.glua-netdebug.getHost', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter the host address and port to debug.",
 			value: "localhost:27100"
 		});
 	}));
-	context.subscriptions.push(vscode.commands.registerCommand('extension.glua-debug.getKey', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.glua-netdebug.getKey', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter the key used by the server to debug.",
 			value: "CHANGEME"
