@@ -3,7 +3,7 @@ Garry's Mod lua debugger for VSCode
 
 This allows you to debug (place breakpoints, step through code, ..) a Garry's Mod server using the debugger interface in VSCode.
 
-***The following information is not fool-proof and assumes a basic understanding of 
+***The following information is not fool-proof and assumes a basic understanding of some concepts***
 
 # Building
 There are 3 main parts to this project:
