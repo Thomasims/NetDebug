@@ -16,7 +16,6 @@ key = "CHANGEME"
 
 }
 
-if SERVER then AddCSLuaFile() end
 if not pcall( require, "blocksocket" ) then return end
 
 module("netdebug", package.seeall)
