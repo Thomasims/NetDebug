@@ -90,6 +90,11 @@
 								"type": "string",
 								"description": "Shared key for authentication.",
 								"default": "${command:askkey}"
+							},
+							"trace": {
+								"type": "boolean",
+								"description": "Enable logging of debug information.",
+								"default": false
 							}
 						}
 					}

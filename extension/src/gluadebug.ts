@@ -13,6 +13,7 @@ interface AttachRequestArguments extends DebugProtocol.AttachRequestArguments {
 	garrysmod: string;
 	host: string;
 	key: string;
+	trace: boolean;
 }
 
 export class GLuaDebugSession extends LoggingDebugSession {
@@ -99,7 +100,7 @@ export class GLuaDebugSession extends LoggingDebugSession {
 	}
 
 	protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments) {
-		logger.setup(Logger.LogLevel.Verbose, false);
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 		await this._configurationDone.wait(1000);
 		this._runtime.start(args.garrysmod, args.host, args.key).then(() => {
 			logger.log("adapter then");
