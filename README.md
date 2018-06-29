@@ -43,4 +43,4 @@ Or just clone the project in the addons folder, the folder structure is already 
 - Place breakpoints and start debugging in vscode.
 
 # Notes
-- The server uses a timer to listen for new requests. As such you will need to have a player (or a bot) on the server for it to run.
+- The server uses a timer to listen for new requests. As such you will need to have a player (or a bot) on the server or set `sv_hibernate_think 1` for it to run.
